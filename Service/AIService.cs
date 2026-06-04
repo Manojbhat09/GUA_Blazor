@@ -134,7 +134,7 @@ public class AIService
 
     public async Task SendMessageAgent(string message, List<string> imagesPath, Action<string> onResponse, CancellationToken ct = default)
     {
-        bool isSlimModel = _modelName.Contains("LFM") || _modelName.Contains("lfm") || _modelName.Contains("Tool") || _modelName.Contains("slim");
+        bool isSlimModel = _modelName.Contains("LFM") || _modelName.Contains("lfm") || _modelName.Contains("Tool") || _modelName.Contains("slim") || _modelName.Contains("qwen") || _modelName.Contains("Qwen");
         int MaxTurns = isSlimModel ? 15 : 50;
 
         var parts = ResolveImages(imagesPath);
@@ -156,8 +156,8 @@ public class AIService
                 : _tools.Values.Select(t => new Tool(t.GetToolFunction())).ToList()),
             Messages = messages,
             InvokeClrToolsAutomatically = false,
-            ToolChoice = OutboundToolChoice.Auto,
-            ParallelToolCalls = true,
+            ToolChoice = OutboundToolChoice.Required,
+            ParallelToolCalls = false,
             Model = _modelName,
             MaxTokens = _maxTokens
         });
@@ -546,8 +546,8 @@ public class AIService
                     : null,
                 Messages = newMessages,
                 InvokeClrToolsAutomatically = false,
-                ToolChoice = OutboundToolChoice.Auto,
-                ParallelToolCalls = true,
+                ToolChoice = OutboundToolChoice.Required,
+                ParallelToolCalls = false,
                 Model = _modelName,
                 MaxTokens = _maxTokens
             });
@@ -659,8 +659,8 @@ public class AIService
             Tools = _tools.Values.Select(t => new Tool(t.GetToolFunction())).ToList(),
             Messages = newMessages,
             InvokeClrToolsAutomatically = false,
-            ToolChoice = OutboundToolChoice.Auto,
-            ParallelToolCalls = true,
+            ToolChoice = OutboundToolChoice.Required,
+            ParallelToolCalls = false,
             Model = _modelName,
             MaxTokens = _maxTokens
         });

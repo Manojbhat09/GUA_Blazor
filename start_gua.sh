@@ -5,12 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── Config (override via env) ──────────────────────────────────────────────
-MODEL_PATH="${GUA_MODEL_PATH:-/opt/models/gemma4-uncensored/Q6_K_P.gguf}"
-MMPROJ_PATH="${GUA_MMPROJ_PATH:-}"          # leave empty = text-only
+MODEL_PATH="${GUA_MODEL_PATH:-/opt/models/Qwen3.5-9B-Q8_0.gguf}"
+MMPROJ_PATH="${GUA_MMPROJ_PATH:-}"          # set to /opt/models/mmproj-Qwen3.5-9B-BF16.gguf for vision
 LLAMA_PORT="${LLAMA_PORT:-8082}"
 APP_PORT="${APP_PORT:-5168}"
-CTX="${GUA_CTX:-8192}"
-GUA_MODEL_NAME="${GUA_MODEL:-gemma-4-e4b-it}"
+CTX="${GUA_CTX:-16384}"
+GUA_MODEL_NAME="${GUA_MODEL:-qwen3.5-9b}"
 LOG_DIR="/tmp"
 
 echo "=== GUA Blazor Launcher ==="
@@ -64,7 +64,7 @@ echo "Starting GUA_Blazor on port $APP_PORT..."
 > "$LOG_DIR/gua_blazor.log"
 
 nohup env \
-    GUA_API_ENDPOINT="http://localhost:$LLAMA_PORT/v1/" \
+    GUA_API_ENDPOINT="http://localhost:$LLAMA_PORT/" \
     GUA_MODEL="$GUA_MODEL_NAME" \
     GUA_SUPPORTS_IMAGES="${GUA_SUPPORTS_IMAGES:-false}" \
     GUA_MAX_TOKENS="${GUA_MAX_TOKENS:-4096}" \
