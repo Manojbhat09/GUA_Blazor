@@ -134,14 +134,13 @@ public class AIService
 
     public async Task SendMessageAgent(string message, List<string> imagesPath, Action<string> onResponse, CancellationToken ct = default)
     {
-        bool isSlimModel = _modelName.Contains("LFM") || _modelName.Contains("lfm") || _modelName.Contains("Tool") || _modelName.Contains("slim") || _modelName.Contains("qwen") || _modelName.Contains("Qwen");
-        int MaxTurns = isSlimModel ? 15 : 50;
+        bool isQwen = _modelName.Contains("qwen") || _modelName.Contains("Qwen");
+        bool isSlimModel = _modelName.Contains("LFM") || _modelName.Contains("lfm") || _modelName.Contains("Tool") || _modelName.Contains("slim") || isQwen;
+        int MaxTurns = isSlimModel ? 20 : 50;
 
         var parts = ResolveImages(imagesPath);
-        // Prepend /nothink to user message for Qwen3-family models to disable reasoning tokens
-        string userText = isSlimModel && (_modelName.Contains("qwen") || _modelName.Contains("Qwen"))
-            ? "/nothink\n" + message
-            : message;
+        // /nothink suppresses Qwen3-family reasoning tokens (must be first in user message, no name field)
+        string userText = isQwen ? "/nothink\n" + message : message;
         parts[0] = new ChatMessagePart(userText);
 
         var messages = new List<LlmTornado.Chat.ChatMessage>
@@ -191,9 +190,7 @@ public class AIService
                 else
                     nudge = $"[Turn {turn + 1}/{MaxTurns}] Continue your task. Call stop_loop when done.";
 
-                // For Qwen3-family: /nothink must be first in the user message with NO name prefix
-                // (the 'name' field in the chat template breaks /nothink positioning)
-                if (isSlimModel && (_modelName.Contains("qwen") || _modelName.Contains("Qwen")))
+                if (isQwen)
                     _conversation.AppendUserInput("/nothink\n" + nudge);
                 else
                     _conversation.AppendUserInputWithName("agent_helper", nudge);
