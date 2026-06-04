@@ -27,6 +27,8 @@ public class AIService
     private string _sessionId;
     private readonly string _modelName;
     private int _screenshotCounter;
+    private bool _supportsImages = Environment.GetEnvironmentVariable("GUA_SUPPORTS_IMAGES") == "true";
+    private static readonly int _maxTokens = int.TryParse(Environment.GetEnvironmentVariable("GUA_MAX_TOKENS"), out var mt) ? mt : 4096;
 
     // Context compression thresholds (token estimates)
     private const int IMAGE_STRIP_THRESHOLD = 20_000;
@@ -69,7 +71,8 @@ public class AIService
             ],
             ToolChoice = OutboundToolChoice.None,
             ParallelToolCalls = true,
-            Model = _modelName
+            Model = _modelName,
+            MaxTokens = _maxTokens
         });
 
         _sessionStore = new();
@@ -122,7 +125,8 @@ public class AIService
         {
             Messages = messages,
             ToolChoice = OutboundToolChoice.None,
-            Model = _modelName
+            Model = _modelName,
+            MaxTokens = _maxTokens
         });
 
         return _conversation.StreamResponseRich(CreateHandler(onResponse, _conversation, null), ct);
@@ -154,7 +158,8 @@ public class AIService
             InvokeClrToolsAutomatically = false,
             ToolChoice = OutboundToolChoice.Auto,
             ParallelToolCalls = true,
-            Model = _modelName
+            Model = _modelName,
+            MaxTokens = _maxTokens
         });
 
         var stopSignal = new StopSignal();
@@ -279,13 +284,24 @@ public class AIService
                         call.Result = new FunctionResult(call, sw.ToString(), null);
                         if (buo.BrowserState?.ScreenshotBase64 is { Length: > 0 } b64)
                         {
-                            conversation.AppendMessage(new LlmTornado.Chat.ChatMessage(ChatMessageRoles.User, [
-                                new ChatMessagePart(b64, ImageDetail.Auto),
-                                new ChatMessagePart($"[Browser state screenshot attached. You can use this to inform your next actions.]"),
-                            ])
+                            if (_supportsImages)
                             {
-                                Name = "agent_helper"
-                            });
+                                conversation.AppendMessage(new LlmTornado.Chat.ChatMessage(ChatMessageRoles.User, [
+                                    new ChatMessagePart(b64, ImageDetail.Auto),
+                                    new ChatMessagePart($"[Browser state screenshot attached. You can use this to inform your next actions.]"),
+                                ])
+                                {
+                                    Name = "agent_helper"
+                                });
+                            }
+                            else
+                            {
+                                conversation.AppendMessage(new LlmTornado.Chat.ChatMessage(ChatMessageRoles.User,
+                                    "[Browser screenshot taken but model is text-only. Use vision_detect tool to analyze page visually, or extract_content for text.]")
+                                {
+                                    Name = "agent_helper"
+                                });
+                            }
 
                             // Save screenshot to disk cache and notify UI
                             var ssDir = Path.Combine("/tmp/gua_screenshots", _sessionId);
@@ -306,6 +322,12 @@ public class AIService
                     }
                 } catch (Exception e)
                 {
+                    // Auto-detect: if server returns "image input is not supported", disable images
+                    if (e.Message.Contains("image input is not supported") || e.Message.Contains("mmproj"))
+                    {
+                        _supportsImages = false;
+                        Console.WriteLine("[agent] Model does not support images (no mmproj). Disabling screenshot injection.");
+                    }
                     call.Result = new FunctionResult(call, e.Message, false);
                 }
             }
@@ -526,7 +548,8 @@ public class AIService
                 InvokeClrToolsAutomatically = false,
                 ToolChoice = OutboundToolChoice.Auto,
                 ParallelToolCalls = true,
-                Model = _modelName
+                Model = _modelName,
+                MaxTokens = _maxTokens
             });
         }
         return stripped;
@@ -638,7 +661,8 @@ public class AIService
             InvokeClrToolsAutomatically = false,
             ToolChoice = OutboundToolChoice.Auto,
             ParallelToolCalls = true,
-            Model = _modelName
+            Model = _modelName,
+            MaxTokens = _maxTokens
         });
     }
 
