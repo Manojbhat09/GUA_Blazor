@@ -39,8 +39,17 @@ public class BrowserUseTool : AITool<BrowserUseArguments>
             actionResult = $"Action failed: {ex.Message}";
         }
 
-        // After every action, return the result PLUS the new state of the browser
-        bool includeScreenshot = true; // Always capture screenshots for visual context
+        // For go_to_url / wait / scroll: skip full page state to save context
+        bool isNavOnly = args.Action.ToLower() is "go_to_url" or "wait" or "scroll_down" or "scroll_up" or "go_back" or "refresh";
+        if (isNavOnly)
+        {
+            return new BrowserUseOutput {
+                ActionResult = actionResult + " — call extract_content to read the page.",
+                BrowserState = new BrowserState { InteractiveElements = "(call extract_content first)", Instructions = "" }
+            };
+        }
+
+        bool includeScreenshot = true;
         var currentState = await browser.GetCurrentStateAsync(includeScreenshot) as BrowserState;
 
         if (currentState is null)
@@ -57,27 +66,22 @@ public class BrowserUseTool : AITool<BrowserUseArguments>
 
     public override ToolFunction GetToolFunction() => new ToolFunction(
         "browser_use",
-        "A powerful browser automation tool. Maintains state across calls. Returns the result of the action alongside the new page state (URL, interactive elements, and base64 screenshot).",
+        "Browser automation. After go_to_url/scroll/navigation actions, call extract_content to read the page.",
         new
         {
             type = "object",
             properties = new
             {
-                action = new
-                {
-                    type = "string",
-                    description = "The browser action to perform.",
-                    @enum = new[] { "go_to_url", "click_element", "click_coordinates", "click_coordinates_batch", "input_text", "scroll_down", "scroll_up", "send_keys", "go_back", "refresh", "wait", "extract_content" }
-                },
-                url = new { type = "string", description = "URL for 'go_to_url' action." },
-                index = new { type = "integer", description = "Element index for 'click_element' or 'input_text' actions." },
-                text = new { type = "string", description = "Text for 'input_text' action." },
-                scroll_amount = new { type = "integer", description = "Pixels to scroll for 'scroll_down' or 'scroll_up'." },
-                keys = new { type = "string", description = "Keys to send for 'send_keys' action." },
-                seconds = new { type = "integer", description = "Seconds to wait for 'wait' action." },
-                x = new { type = "number", description = "X coordinate for 'click_coordinates' action. Only use this if the normal click is failing" },
-                y = new { type = "number", description = "Y coordinate for 'click_coordinates' action. Only use this if the normal click is failing" },
-                coordinates = new { type = "array", description = "Array of [x, y] coordinate pairs for 'click_coordinates_batch' action. Use this to click multiple elements rapidly in one action - perfect for image grid captchas. Example: [[150,250],[280,250],[410,380],[430,650]] to click 3 grid cells and a verify button.", items = new { type = "array", items = new { type = "number" } } }
+                action = new { type = "string", @enum = new[] { "go_to_url", "click_element", "click_coordinates", "click_coordinates_batch", "input_text", "scroll_down", "scroll_up", "send_keys", "go_back", "refresh", "wait", "extract_content" } },
+                url = new { type = "string" },
+                index = new { type = "integer" },
+                text = new { type = "string" },
+                scroll_amount = new { type = "integer" },
+                keys = new { type = "string" },
+                seconds = new { type = "integer" },
+                x = new { type = "number" },
+                y = new { type = "number" },
+                coordinates = new { type = "array", items = new { type = "array", items = new { type = "number" } } }
             },
             required = new List<string> { "action" }
         });
@@ -385,7 +389,7 @@ public class BrowserSession
         return $"Waited {seconds ?? 3} seconds.";
     }
 
-    public async Task<string> ExtractContentAsync(int maxChars = 3000)
+    public async Task<string> ExtractContentAsync(int maxChars = 1500)
     {
         var content = await _page!.EvaluateAsync<string>("() => document.body.innerText");
 
@@ -412,7 +416,7 @@ public class BrowserSession
 
         var lines = (interactiveElements?.Split('\n', StringSplitOptions.RemoveEmptyEntries) ?? []).ToArray();
 
-        const int cap = 80;
+        const int cap = 15;
         interactiveElements = lines.Length > cap
             ? string.Join('\n', lines[..cap]) + $"\n... ({lines.Length - cap} more off-screen elements not shown — scroll down then extract_content to re-index)"
             : string.Join('\n', lines);

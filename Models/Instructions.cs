@@ -301,7 +301,8 @@ When approaching any task, follow this decision order:
 ";
 
     public static readonly string SlimAgentInstruction =
-@"You are GUA. Complete ALL steps of the task using tools. Call stop_loop only after every requested step is done.
+@"/nothink
+You are GUA. Complete ALL steps of the task using tools. Call stop_loop only after every requested step is done.
 
 Rules:
 1. Use the next required tool. Do not describe what you will do — just do it.

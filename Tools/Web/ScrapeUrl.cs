@@ -10,7 +10,11 @@ public class ScrapeUrl : AITool<ScrapeUrlArguments>
         if (string.IsNullOrWhiteSpace(args.Url))
             throw new Exception("URL is required.");
 
-        return await WebScraper.ScrapeTextFromUrlAsync(args.Url);
+        var content = await WebScraper.ScrapeTextFromUrlAsync(args.Url);
+        const int MaxChars = 4000;
+        if (content is string s && s.Length > MaxChars)
+            content = s[..MaxChars] + $"\n\n[TRUNCATED — {s.Length - MaxChars} more chars. Use browser_use to load and scroll.]";
+        return content;
     }
 
     public override ToolFunction GetToolFunction() => new ToolFunction(

@@ -138,7 +138,11 @@ public class AIService
         int MaxTurns = isSlimModel ? 15 : 50;
 
         var parts = ResolveImages(imagesPath);
-        parts[0] = new ChatMessagePart(message);
+        // Prepend /nothink to user message for Qwen3-family models to disable reasoning tokens
+        string userText = isSlimModel && (_modelName.Contains("qwen") || _modelName.Contains("Qwen"))
+            ? "/nothink\n" + message
+            : message;
+        parts[0] = new ChatMessagePart(userText);
 
         var messages = new List<LlmTornado.Chat.ChatMessage>
         {
@@ -183,9 +187,13 @@ public class AIService
                 else if (!string.IsNullOrEmpty(planContext))
                     nudge = $"[Turn {turn + 1}/{MaxTurns}]\n{planContext}\nWork on the next unchecked step. Call stop_loop when done.";
                 else if (turn == 1)
-                    nudge = $"[Turn {turn + 1}/{MaxTurns}] Reminder: create planning/task_plan.md first if this is a multi-step task. Call stop_loop when done.";
+                    nudge = $"[Turn {turn + 1}/{MaxTurns}] Continue your task. Call stop_loop when done.";
                 else
                     nudge = $"[Turn {turn + 1}/{MaxTurns}] Continue your task. Call stop_loop when done.";
+
+                // Prepend /nothink to suppress Qwen3-family thinking tokens on every turn
+                if (isSlimModel && (_modelName.Contains("qwen") || _modelName.Contains("Qwen")))
+                    nudge = "/nothink\n" + nudge;
 
                 _conversation.AppendUserInputWithName("agent_helper", nudge);
             }
