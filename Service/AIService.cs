@@ -191,11 +191,12 @@ public class AIService
                 else
                     nudge = $"[Turn {turn + 1}/{MaxTurns}] Continue your task. Call stop_loop when done.";
 
-                // Prepend /nothink to suppress Qwen3-family thinking tokens on every turn
+                // For Qwen3-family: /nothink must be first in the user message with NO name prefix
+                // (the 'name' field in the chat template breaks /nothink positioning)
                 if (isSlimModel && (_modelName.Contains("qwen") || _modelName.Contains("Qwen")))
-                    nudge = "/nothink\n" + nudge;
-
-                _conversation.AppendUserInputWithName("agent_helper", nudge);
+                    _conversation.AppendUserInput("/nothink\n" + nudge);
+                else
+                    _conversation.AppendUserInputWithName("agent_helper", nudge);
             }
 
             var msgCountBefore = _conversation.Messages.Count;
@@ -249,7 +250,7 @@ public class AIService
             {
                 foreach (var result in results.ToolResults)
                 {
-                    if (result?.Result?.Name == "stop_loop" && result?.Result?.Content == "stopping_loop")
+                    if (result?.Result?.Name == "stop_loop")
                     {
                         if (stopSignal != null) stopSignal.Stop = true;
                     }

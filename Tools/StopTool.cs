@@ -20,8 +20,7 @@ public class StopTool : AITool<StopToolArgs>
 
     protected override string Execute(StopToolArgs args)
     {
-        bool stop = bool.TryParse(args.StopLoop, out var b) && b;
-        return stop ? "stopping_loop" : "continuing_loop";
+        return "stopping_loop";  // any call to stop_loop means stop
     }
 }
 
