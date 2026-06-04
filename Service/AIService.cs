@@ -151,7 +151,7 @@ public class AIService
         _conversation = _api.Chat.CreateConversation(new ChatRequest
         {
             Tools = (isSlimModel
-                ? _tools.Where(t => t.Key is "browser_use" or "vision_detect" or "stop_loop" or "create_file" or "read_file" or "extract_audio" or "web_search" or "scrape_url")
+                ? _tools.Where(t => t.Key is "browser_use" or "vision_detect" or "stop_loop" or "create_file" or "read_file" or "edit_file" or "list_directory" or "run_command" or "read_terminal_output" or "extract_audio" or "web_search" or "scrape_url" or "ask_user")
                          .Select(t => new Tool(t.Value.GetToolFunction())).ToList()
                 : _tools.Values.Select(t => new Tool(t.GetToolFunction())).ToList()),
             Messages = messages,
