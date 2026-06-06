@@ -13,7 +13,8 @@ GUA is a powerful, autonomous AI assistant built on **Blazor Server (.NET 10)**.
     - [Playwright Setup](#1-playwright-browser-automation)
     - [llama.cpp Setup](#2-llamacpp-inference-server)
     - [whisper.cpp Setup](#3-whispercpp-transcription-server)
-    - [Kokoro TTS Setup](#4-kokoro-tts-python)
+    - [mlx_vlm Setup (Apple Silicon)](#4-mlx_vlm-apple-silicon--mlx-native)
+    - [Kokoro TTS Setup](#5-kokoro-tts-python)
 4. [⚠️ Limitations & Known Issues](#️-limitations--known-issues)
 5. [🛠️ Tools Reference](#️-tools-reference)
 6. [📁 Project Structure](#-project-structure)
@@ -79,7 +80,27 @@ GUA requires an OpenAI-compatible API endpoint.
     whisper-server.exe -m models/ggml-large-v3.bin --port 8081
     ```
 
-### 4. Kokoro TTS (Python)
+### 4. mlx_vlm (Apple Silicon — MLX Native)
+
+Run GUA with native MLX inference instead of llama.cpp — no GGUF needed.
+Tested on M4 16 GB with `mlx-community/gemma-4-12B-it-4bit` (scores **7/8** on the H1–H8 benchmark).
+
+```bash
+# Install mlx_vlm into a dedicated venv
+python3 -m venv .venv-mlx
+source .venv-mlx/bin/activate
+pip install mlx-vlm
+
+# Launch (downloads model on first run, ~11 GB)
+./start_gua_mlx.sh
+```
+
+> **Required:** a one-line patch to `mlx_vlm/server/generation.py` — `start_gua_mlx.sh` applies it automatically.
+> See [`docs/mlx-gemma4.md`](docs/mlx-gemma4.md) for the patch, all config options, and the full benchmark comparison against GGUF.
+
+---
+
+### 5. Kokoro TTS (Python)
 The text-to-speech service requires the Kokoro Python implementation.
 1.  Navigate to your Kokoro folder.
 2.  Setup: `python -m venv venv` and `pip install flask kokoro soundfile`.
