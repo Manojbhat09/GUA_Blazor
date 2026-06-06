@@ -15,7 +15,7 @@ against the GGUF variants of the same model.
 | Backend | llama.cpp CPU/Metal | MLX (Apple unified memory, GPU-native) |
 | Vision support | Requires separate mmproj | Native multimodal (same model handles text + images) |
 | Quantization options | Many (Q4, Q5, Q6, Q8…) | 4-bit and 8-bit (community) |
-| M4 16 GB fit | ✅ Q5/Q6 both work | ✅ 4-bit only (8-bit OOMs) |
+| M4 16 GB fit | ✅ Q5/Q6; ❌ Q8+ (context cliff — see below) | ✅ 4-bit only (8-bit OOMs) |
 
 ---
 
@@ -130,24 +130,52 @@ is enough for all benchmark tasks (max observed: 20 browser_use calls on H1).
 
 ## Benchmark: Gemma 4 12B — H1–H8 task suite
 
-Tasks run via [GUA_Blazor](../) autonomous agent on the same M4 16 GB machine.
+Tasks run via [GUA_Blazor](../) autonomous agent on an M4 16 GB machine.
 Each task is scored: **✅ COMPLETE** (stop_loop called with result), **⚠️ PARTIAL** (tool calls made but no stop_loop), **❌ FAIL** (no tool calls or server crash).
 
-| Task | Baseline | GGUF Q5_K_XL | GGUF Q6_K | osmapi-4.2bpw | **MLX 4-bit** |
-|---|:---:|:---:|:---:|:---:|:---:|
-| H1: Multi-hop Wikipedia | ⚠️ | ⚠️ | ⚠️ | ❌ | ⚠️ |
-| H2: HN scores extraction | ⚠️ | ✅ | ✅ | ❌ | ✅ |
-| H3: Code debug loop | ⚠️ | ✅ | ✅ | ❌ | ✅ |
-| H4: Multi-file project | ✅ | ✅ | ✅ | ❌ | ✅ |
-| H5: GitHub trending (browser) | ⚠️ | ✅ | ✅ | ❌ | ✅ |
-| H6: Conditional shell logic | ✅ | ✅ | ✅ | ❌ | ✅ |
-| H7: httpbin form fill | ⚠️ | ✅ | ⚠️ | ❌ | ✅ |
-| H8: reCAPTCHA (vision_detect) | — | ❌ | ⚠️ | ❌ | ✅ |
-| **Score** | 2✅ 5⚠️ | 6✅ 1⚠️ 1❌ | 5✅ 3⚠️ | 0✅ 8❌ | **7✅ 1⚠️** |
+**Baseline model**: Qwen3.5-9B-Q8_0 via llama-server (the default in `start_gua.sh`).
+Note: GUA's README lists Qwen3.5-35B-A3B as the recommended primary model; the 9B was used here as the available local model for establishing a reference point.
 
-The MLX 4-bit model scores **7/8** — the highest of all variants tested, including GGUF. H8 (vision task)
-is the standout: GGUF Q5 fails it outright, GGUF Q6 gets partial; MLX completes it because
-`mlx_vlm` handles vision natively without a separate mmproj.
+### Full results
+
+| Task | Baseline¹ | GGUF UD-Q5_K_XL | GGUF Q6_K | GGUF UD-Q6_K_XL | GGUF Q8_0 | osmapi-4.2bpw | **MLX 4-bit** | MLX 8-bit |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| H1: Multi-hop Wikipedia | ⚠️ | ⚠️ | ⚠️ | ❌² | ❌² | ❌³ | ⚠️ | ❌⁴ |
+| H2: HN scores extraction | ⚠️ | ✅ | ✅ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H3: Code debug loop | ⚠️ | ✅ | ✅ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H4: Multi-file project | ✅ | ✅ | ✅ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H5: GitHub trending (browser) | ⚠️ | ✅ | ✅ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H6: Conditional shell logic | ✅ | ✅ | ✅ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H7: httpbin form fill | ⚠️ | ✅ | ⚠️ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| H8: reCAPTCHA (vision_detect) | —⁵ | ❌ | ⚠️ | ❌² | ❌² | ❌³ | ✅ | ❌⁴ |
+| **Score** | 2✅ 5⚠️ | 6✅ 1⚠️ 1❌ | 5✅ 3⚠️ | 0✅ 8❌ | 0✅ 8❌ | 0✅ 8❌ | **7✅ 1⚠️** | 0✅ 8❌ |
+
+¹ Qwen3.5-9B-Q8_0 via llama-server; baseline tasks timed out rather than completing (hence ⚠️ not ❌ — tool calls were made).  
+² **Tool-call pre-flight HTTP 500**: UD-Q6_K_XL (10.7 GB, ctx=4096) and Q8_0 (12.7 GB, ctx=2048) both returned HTTP 500 on the tool-call health check. The sweep script auto-reduces ctx for larger models to stay within the 16 GB memory budget, but below ctx≈5000 the full GUA tool schema + system prompt exceeds the context window, causing llama-server to crash before any task runs.  
+³ Tool-call tokens never emitted; model loops on `<|channel>thought` indefinitely.  
+⁴ **Metal OOM at inference time** — 8-bit weights alone (~12 GB) plus OS overhead exceed 16 GB unified memory. Server starts but crashes on the first forward pass.  
+⁵ H8 (vision) requires mmproj; GGUF baseline had no mmproj loaded so the task was not run.
+
+### GGUF quantization cliff: why Q6 works but UD-Q6_K_XL doesn't
+
+On M4 16 GB the usable context shrinks as model size grows:
+
+| Quant | Size | Max ctx at 16 GB | Tool-call test | Score |
+|---|---|---|---|---|
+| UD-Q5_K_XL | 8.61 GB | 6144 | ✅ | 6/8 |
+| Q6_K | 9.79 GB | 4096 | ✅ | 5/8 |
+| UD-Q6_K_XL | 10.7 GB | 4096 | ❌ HTTP 500 | 0/8 |
+| Q8_0 | 12.7 GB | 2048 | ❌ HTTP 500 | 0/8 |
+| UD-Q8_K_XL | 13.6 GB | — | download stalled | — |
+
+The GUA system prompt + 13-tool schema totals ~1922 tokens. At ctx=4096, Q6_K still fits this
+with room for tool results; at the same ctx=4096 but heavier weights (UD-Q6_K_XL), the additional
+weight activation memory pushes llama.cpp over the Metal allocation limit mid-inference → HTTP 500.
+UD-Q8_K_XL's download stalled at 13.4/13.6 GB for over 20 minutes on every attempt; it was not benchmarked.
+
+The MLX 4-bit model scores **7/8** — the highest of all variants tested. H8 (vision task) is the
+standout: GGUF Q5 fails it, GGUF Q6 gets partial; MLX completes it because `mlx_vlm` handles
+vision natively without a separate mmproj.
 
 H1 (multi-hop Wikipedia) stays ⚠️ across all models — the model exhausts the 20-turn agent limit
 without converging, consistent with the difficulty of multi-hop retrieval at this parameter scale.
